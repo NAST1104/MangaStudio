@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MangaStudio.Core/MangaStudio.Core.csproj" />
+  <Project Path="MangaStudio.Imaging/MangaStudio.Imaging.csproj" />
+  <Project Path="MangaStudio.IO/MangaStudio.IO.csproj" />
+  <Project Path="MangaStudio.Tests/MangaStudio.Tests.csproj" />
+  <Project Path="MangaStudio.UI/MangaStudio.UI.csproj" />
+</Solution>
