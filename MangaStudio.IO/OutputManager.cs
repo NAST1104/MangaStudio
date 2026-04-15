@@ -2,7 +2,9 @@ using Serilog;
 
 namespace MangaStudio.IO;
 
-public class OutputManager
+using MangaStudio.Core.Interfaces;
+
+public class OutputManager : IOutputManager
 {
     private readonly ILogger _logger;
 
