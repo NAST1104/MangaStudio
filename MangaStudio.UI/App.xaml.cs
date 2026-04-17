@@ -5,6 +5,9 @@ using MangaStudio.Core.Processing;
 using MangaStudio.Core.Services;
 using MangaStudio.Imaging;
 using MangaStudio.IO;
+using MangaStudio.UI.Logging;
+using MangaStudio.UI.Services;
+using MangaStudio.UI.ViewModels;
 using Serilog;
 using System.Windows;
 
@@ -18,6 +21,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // ── Step 1: Create LogViewModel first so UiLogSink can reference it ──
+        var logViewModel = new LogViewModel();
+
+        // ── Step 2: Configure Serilog with the UI sink ────────────────────────
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.Console(outputTemplate:
@@ -25,14 +32,21 @@ public partial class App : Application
             .WriteTo.File("logs/mangastudio-.log",
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7)
+            .WriteTo.Sink(new UiLogSink(logViewModel))
             .CreateLogger();
 
         Log.Information("MangaStudio starting up");
 
+        // ── Step 3: Load settings to know which backend to start with ─────────
+        var settingsService = new SettingsService();
+        var appSettings = settingsService.Load();
+
+        // ── Step 4: Build DI container ────────────────────────────────────────
         var services = new ServiceCollection();
 
-        // Logging
+        // Infrastructure
         services.AddSingleton<ILogger>(Log.Logger);
+        services.AddSingleton(settingsService);
 
         // IO
         services.AddSingleton<IFolderScanner, FolderScanner>();
@@ -43,7 +57,7 @@ public partial class App : Application
         // Imaging
         services.AddSingleton<ImageServiceFactory>();
         services.AddSingleton<IImageService>(provider =>
-            provider.GetRequiredService<ImageServiceFactory>().Create(ImagingBackend.Vips));
+            provider.GetRequiredService<ImageServiceFactory>().Create(appSettings.Backend));
 
         // Core pipeline
         services.AddSingleton<IMetadataReader, MetadataReader>();
@@ -54,7 +68,15 @@ public partial class App : Application
         services.AddSingleton<IStitchEngine, StitchEngine>();
         services.AddSingleton<PipelineOrchestrator>();
 
+        // ViewModels — LogViewModel is pre-created so we register the instance
+        services.AddSingleton(logViewModel);
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<HomeViewModel>();
+        services.AddSingleton<MainViewModel>();
+
         Services = services.BuildServiceProvider();
+
+        Log.Information("DI container built — backend: {Backend}", appSettings.Backend);
 
         new MainWindow().Show();
     }

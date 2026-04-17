@@ -1,0 +1,75 @@
+﻿<UserControl x:Class="MangaStudio.UI.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  Background="{StaticResource SurfaceBrush}">
+        <StackPanel Margin="28" MaxWidth="620">
+
+            <!-- ── Imaging Backend ── -->
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Imaging Backend"/>
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="libvips is significantly faster for large images. ImageSharp is the safe fallback."
+                       TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <ComboBox ItemsSource="{Binding AvailableBackends}"
+                      SelectedItem="{Binding Backend}"
+                      Width="200"
+                      HorizontalAlignment="Left"/>
+            <TextBlock Text="{Binding BackendNote}"
+                       Style="{StaticResource HintText}"
+                       Margin="0,6,0,0"/>
+
+            <!-- ── Max Stitch Height ── -->
+            <TextBlock Style="{StaticResource SectionHeader}"
+                       Text="Max Stitch Height (px)" Margin="0,28,0,6"/>
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Output images will never exceed this pixel height. Increase for fewer output files."
+                       TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <TextBox Text="{Binding MaxStitchHeight, UpdateSourceTrigger=PropertyChanged}"
+                     Width="160"
+                     HorizontalAlignment="Left"/>
+
+            <!-- ── Default Quality ── -->
+            <TextBlock Style="{StaticResource SectionHeader}"
+                       Text="Default Quality (WebP)" Margin="0,28,0,6"/>
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Used as the starting value on the Home tab. Can be overridden per session."
+                       TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="380"/>
+                    <ColumnDefinition Width="60"/>
+                </Grid.ColumnDefinitions>
+                <Slider Minimum="1" Maximum="100"
+                        Value="{Binding DefaultQuality}"
+                        VerticalAlignment="Center"
+                        Grid.Column="0"/>
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           FontSize="13"
+                           Foreground="{StaticResource TextPrimaryBrush}">
+                    <Run Text="{Binding DefaultQuality, Mode=OneWay}"/><Run Text="%"/>
+                </TextBlock>
+            </Grid>
+
+            <!-- ── Delete Originals ── -->
+            <TextBlock Style="{StaticResource SectionHeader}"
+                       Text="After Processing" Margin="0,28,0,8"/>
+            <CheckBox Content="Delete original chapter folders after successful processing"
+                      IsChecked="{Binding DeleteOriginals}"/>
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Warning: this permanently removes the source images. Make sure your output path is correct before enabling."
+                       TextWrapping="Wrap"
+                       Margin="20,4,0,0"/>
+
+            <!-- ── Reset ── -->
+            <Button Content="Reset to Defaults"
+                    Command="{Binding ResetCommand}"
+                    Style="{StaticResource SecondaryButton}"
+                    HorizontalAlignment="Left"
+                    Margin="0,28,0,0"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
