@@ -33,11 +33,11 @@ public sealed class PipelineOrchestrator
     }
 
     public async Task<List<ProcessingResult>> ProcessAllAsync(
-        string mangaRootPath,
-        string outputRootPath,
-        ExportOptions options,
-        IProgress<(int current, int total, string currentChapter)>? progress = null,
-        CancellationToken cancellationToken = default)
+    string mangaRootPath,
+    string outputRootPath,
+    ExportOptions options,
+    IProgress<(int current, int total, string currentChapter)>? progress = null,
+    CancellationToken cancellationToken = default)
     {
         var results = new List<ProcessingResult>();
 
@@ -53,6 +53,16 @@ public sealed class PipelineOrchestrator
         }
 
         _logger.Information("Found {N} chapter(s) under {Path}", chapterPaths.Count, mangaRootPath);
+
+        // Derive manga name from the root folder and create a dedicated output subfolder.
+        // This prevents chapters from different manga overwriting each other.
+        // Example: input  = D:\Manga\OnePiece
+        //          output = D:\Output\OnePiece\CH0001\CH0001-001.webp
+        var mangaFolderName = Path.GetFileName(mangaRootPath.TrimEnd(Path.DirectorySeparatorChar,
+                                                                       Path.AltDirectorySeparatorChar));
+        var mangaOutputPath = Path.Combine(outputRootPath, mangaFolderName);
+
+        _logger.Information("Output path for this manga: {Path}", mangaOutputPath);
 
         for (int i = 0; i < chapterPaths.Count; i++)
         {
@@ -105,10 +115,25 @@ public sealed class PipelineOrchestrator
 
             var chapterProgress = new Progress<(int, int)>(p =>
                 progress?.Report((i, chapterPaths.Count,
-                    $"{folderName} — chunk {p.Item1}/{p.Item2}")));
+                    $"{mangaFolderName} - {folderName} — chunk {p.Item1}/{p.Item2}")));
 
-            var result = await _stitchEngine.ProcessChapterAsync(
-                metadata, outputRootPath, options, chapterProgress, cancellationToken);
+            // Pass mangaOutputPath so the structure is OutputRoot/MangaName/CH0001/
+            ProcessingResult result;
+            try
+            {
+                result = await _stitchEngine.ProcessChapterAsync(
+                    metadata, mangaOutputPath, options, chapterProgress, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Unhandled error in stitch engine for chapter {Name}", folderName);
+                result = new ProcessingResult
+                {
+                    Success = false,
+                    ChapterName = folderName,
+                    ErrorMessage = $"{ex.GetType().Name}: {ex.Message}"
+                };
+            }
 
             results.Add(result);
         }

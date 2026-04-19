@@ -5,9 +5,6 @@ using System.Runtime.CompilerServices;
 
 namespace MangaStudio.Core.Processing;
 
-// Yields image file paths one at a time.
-// The consumer (StitchEngine) is responsible for loading and disposing each image.
-// This keeps the enumerator itself allocation-free and testable without imaging deps.
 public sealed class ImageEnumerator : IImageEnumerator
 {
     private readonly ILogger _logger;
@@ -37,11 +34,13 @@ public sealed class ImageEnumerator : IImageEnumerator
 
             _logger.Debug("Enumerating image {Index}/{Total}: {Path}", i + 1, total, path);
 
-            // Yield the path — the caller loads, uses, and disposes the image
             yield return path;
 
-            // Small yield to keep the UI responsive when processing large chapters
-            await Task.Yield();
+            // Yield every 10 images to keep the thread pool scheduler happy.
+            // Since we now run inside Task.Run, this yields the thread briefly
+            // so other queued work items can run — not the UI thread.
+            if (i % 10 == 0)
+                await Task.Yield();
         }
     }
 }

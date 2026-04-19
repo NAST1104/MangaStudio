@@ -1,4 +1,5 @@
-﻿using MangaStudio.Core.Interfaces;
+﻿using MangaStudio.Core.DTOs;
+using MangaStudio.Core.Interfaces;
 using Serilog;
 
 namespace MangaStudio.Core.Processing;
@@ -30,6 +31,14 @@ public sealed class StitchPlanner : IStitchPlanner
     //   Result: [[0,1,2],[3],[4]]
     public List<List<int>> Plan(List<int> imageHeights, int maxStitchHeight)
     {
+        // Use the caller-supplied maxStitchHeight as-is.
+        // The caller (PipelineOrchestrator) already gets this value from
+        // ExportOptions.MaxStitchHeight which is clamped per-format at build time.
+        int effectiveMax = maxStitchHeight;
+
+        _logger.Debug("StitchPlanner: planning {ImageCount} images with effectiveMax={Max}px",
+            imageHeights.Count, effectiveMax);
+
         var chunks = new List<List<int>>();
         var current = new List<int>();
         int runningHeight = 0;
@@ -38,12 +47,16 @@ public sealed class StitchPlanner : IStitchPlanner
         {
             int h = imageHeights[i];
 
-            bool wouldExceed = runningHeight + h > maxStitchHeight;
+            if (h > effectiveMax)
+                _logger.Warning(
+                    "Image index {I} height {H}px exceeds max {Max}px — placed alone in its own chunk",
+                    i, h, effectiveMax);
+
+            bool wouldExceed = runningHeight + h > effectiveMax;
             bool currentHasImages = current.Count > 0;
 
             if (wouldExceed && currentHasImages)
             {
-                // Close the current chunk and start a new one
                 chunks.Add(new List<int>(current));
                 current.Clear();
                 runningHeight = 0;
@@ -53,12 +66,11 @@ public sealed class StitchPlanner : IStitchPlanner
             runningHeight += h;
         }
 
-        // Close the final chunk if it has anything in it
         if (current.Count > 0)
             chunks.Add(current);
 
-        _logger.Debug("StitchPlanner: {ImageCount} images → {ChunkCount} chunks (maxH={Max}px)",
-            imageHeights.Count, chunks.Count, maxStitchHeight);
+        _logger.Debug("StitchPlanner: {ImageCount} images → {ChunkCount} chunks (effectiveMax={Max}px)",
+            imageHeights.Count, chunks.Count, effectiveMax);
 
         for (int c = 0; c < chunks.Count; c++)
             _logger.Debug("  Chunk {C}: images [{Indices}], height={H}px",

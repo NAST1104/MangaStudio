@@ -98,19 +98,28 @@ public sealed class StitchEngine : IStitchEngine
                 {
                     if (currentChunkIndex >= 0 && !canvas.IsEmpty)
                     {
-                        // Write the completed chunk to disk
                         var chunkPath = _outputManager.GetOutputFilePath(
                             outputDir,
                             chapter.NormalizedName,
                             currentChunkIndex + 1,
                             options.Format == ExportFormat.WebP ? "webp" : "jpg");
 
-                        _imageService.FlushCanvas(canvas, chunkPath, options);
-                        outputCount++;
-
-                        progress?.Report((currentChunkIndex + 1, totalChunks));
-                        _logger.Information("Flushed chunk {C}/{T} → {Path}",
-                            currentChunkIndex + 1, totalChunks, chunkPath);
+                        try
+                        {
+                            _imageService.FlushCanvas(canvas, chunkPath, options);
+                            outputCount++;
+                            progress?.Report((currentChunkIndex + 1, totalChunks));
+                            _logger.Information("Flushed chunk {C}/{T} → {Path}",
+                                currentChunkIndex + 1, totalChunks, chunkPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            var msg = $"Failed to flush chunk {currentChunkIndex + 1}: {ex.Message}";
+                            warnings.Add(msg);
+                            _logger.Error(ex, msg);
+                            // Canvas is in unknown state — reset it to avoid corrupted output
+                            canvas.Dispose();
+                        }
                     }
 
                     currentChunkIndex = targetChunk;
@@ -129,9 +138,21 @@ public sealed class StitchEngine : IStitchEngine
                 }
 
                 // ── Append to canvas ─────────────────────────────────────────
-                using (normalizedImage)
+                try
                 {
-                    _imageService.AppendToCanvas(canvas, normalizedImage);
+                    using (normalizedImage)
+                    {
+                        _imageService.AppendToCanvas(canvas, normalizedImage);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    normalizedImage.Dispose();
+                    var msg = $"Skipped image (append failed): {Path.GetFileName(imagePath)} — {ex.Message}";
+                    warnings.Add(msg);
+                    _logger.Warning(ex, msg);
+                    chapterImageIndex++;
+                    continue;
                 }
                 // normalizedImage is disposed here — only the canvas holds a copy
 
@@ -139,7 +160,7 @@ public sealed class StitchEngine : IStitchEngine
                 imageStreamIndex++;
             }
 
-            // ── Step 3: Flush the final chunk ────────────────────────────────
+            // ── Step 3: Flush the final chunk ────────────────────────────────────
             if (!canvas.IsEmpty)
             {
                 var finalChunkPath = _outputManager.GetOutputFilePath(
@@ -148,12 +169,20 @@ public sealed class StitchEngine : IStitchEngine
                     currentChunkIndex + 1,
                     options.Format == ExportFormat.WebP ? "webp" : "jpg");
 
-                _imageService.FlushCanvas(canvas, finalChunkPath, options);
-                outputCount++;
-
-                progress?.Report((totalChunks, totalChunks));
-                _logger.Information("Flushed final chunk {C}/{T} → {Path}",
-                    currentChunkIndex + 1, totalChunks, finalChunkPath);
+                try
+                {
+                    _imageService.FlushCanvas(canvas, finalChunkPath, options);
+                    outputCount++;
+                    progress?.Report((totalChunks, totalChunks));
+                    _logger.Information("Flushed final chunk {C}/{T} → {Path}",
+                        currentChunkIndex + 1, totalChunks, finalChunkPath);
+                }
+                catch (Exception ex)
+                {
+                    var msg = $"Failed to flush final chunk: {ex.Message}";
+                    warnings.Add(msg);
+                    _logger.Error(ex, msg);
+                }
             }
 
             // ── Step 4: Optionally delete original chapter folder ────────────
@@ -184,12 +213,22 @@ public sealed class StitchEngine : IStitchEngine
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Unexpected error processing chapter: {Name}", chapter.NormalizedName);
+            // Log the full exception chain including stack trace so we can diagnose it
+            _logger.Error(ex, "Unexpected error processing chapter: {Name} — {Type}: {Message}",
+                chapter.NormalizedName, ex.GetType().Name, ex.Message);
+
+            if (ex.InnerException is not null)
+                _logger.Error(ex.InnerException,
+                    "Inner exception for chapter {Name}", chapter.NormalizedName);
+
             return new ProcessingResult
             {
                 Success = false,
                 ChapterName = chapter.NormalizedName,
-                ErrorMessage = ex.Message,
+                ErrorMessage = $"{ex.GetType().Name}: {ex.Message}" +
+                               (ex.InnerException is not null
+                                   ? $" → {ex.InnerException.Message}"
+                                   : string.Empty),
                 Warnings = warnings
             };
         }

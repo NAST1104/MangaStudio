@@ -40,6 +40,8 @@ public class HomeViewModel : BaseViewModel
         get => _quality;
         set => SetField(ref _quality, Math.Clamp(value, 1, 100));
     }
+    // Shown next to the quality slider so the user knows which format is active
+    public string QualityLabel => $"Output Quality ({_settings.OutputFormat})";
 
     // ── Processing state ──────────────────────────────────────────────────────
     private bool _isProcessing;
@@ -132,6 +134,12 @@ public class HomeViewModel : BaseViewModel
         CancelCommand = new RelayCommand(
             CancelProcessing,
             () => IsProcessing);
+
+        _settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.OutputFormat))
+                OnPropertyChanged(nameof(QualityLabel));
+        };
     }
 
     private void AddFolder()
@@ -180,10 +188,12 @@ public class HomeViewModel : BaseViewModel
 
         var folders = FolderList.ToList();
         var options = _settings.BuildExportOptions(Quality);
+        var token = _cts.Token;
 
         int totalSucceeded = 0;
         int totalFailed = 0;
 
+        // Marshal progress updates back to the UI thread
         var progress = new Progress<(int current, int total, string currentChapter)>(p =>
         {
             ProgressMax = p.total;
@@ -194,20 +204,35 @@ public class HomeViewModel : BaseViewModel
 
         try
         {
-            for (int i = 0; i < folders.Count; i++)
+            // Task.Run moves all synchronous pipeline work (IO, image processing)
+            // off the UI thread onto the thread pool.
+            // Progress<T> and CancellationToken cross the boundary safely.
+            var (succeeded, failed) = await Task.Run(async () =>
             {
-                StatusText = $"Scanning {i + 1}/{folders.Count}: {Path.GetFileName(folders[i])}";
+                int s = 0, f = 0;
 
-                var results = await _orchestrator.ProcessAllAsync(
-                    folders[i],
-                    OutputPath,
-                    options,
-                    progress,
-                    _cts.Token);
+                for (int i = 0; i < folders.Count; i++)
+                {
+                    token.ThrowIfCancellationRequested();
 
-                totalSucceeded += results.Count(r => r.Success);
-                totalFailed += results.Count(r => !r.Success);
-            }
+                    var folderName = Path.GetFileName(folders[i]);
+
+                    // Post a status update to the UI thread
+                    ((IProgress<(int, int, string)>)progress)
+                        .Report((i, folders.Count, $"Scanning: {folderName}"));
+
+                    var results = await _orchestrator.ProcessAllAsync(
+                        folders[i], OutputPath, options, progress, token);
+
+                    s += results.Count(r => r.Success);
+                    f += results.Count(r => !r.Success);
+                }
+
+                return (s, f);
+            }, token);
+
+            totalSucceeded = succeeded;
+            totalFailed = failed;
 
             StatusText = "Completed";
             SummaryText = $"Done — {totalSucceeded} chapter(s) succeeded, {totalFailed} failed.";
@@ -221,7 +246,11 @@ public class HomeViewModel : BaseViewModel
         catch (Exception ex)
         {
             StatusText = "Error";
-            SummaryText = $"Unexpected error: {ex.Message}";
+            SummaryText = $"Error: {ex.GetType().Name} — {ex.Message}";
+
+            // Inner exception often has the real cause (e.g. libvips error inside a wrapper)
+            if (ex.InnerException is not null)
+                SummaryText += $"\nCause: {ex.InnerException.Message}";
         }
         finally
         {
