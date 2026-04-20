@@ -1,9 +1,11 @@
 ﻿using System.Windows.Input;
+using System.IO;
 using MangaStudio.Core.DTOs;
 using MangaStudio.Core.Enums;
 using MangaStudio.UI.Commands;
 using MangaStudio.UI.Models;
 using MangaStudio.UI.Services;
+using MangaStudio.Core.Enums;
 
 namespace MangaStudio.UI.ViewModels;
 
@@ -87,6 +89,17 @@ public class SettingsViewModel : BaseViewModel
         set { if (SetField(ref _deleteOriginals, value)) Save(); }
     }
 
+    // ── Duplicate action ──────────────────────────────────────────────────────
+    private DuplicateAction _duplicateAction;
+    public DuplicateAction DuplicateAction
+    {
+        get => _duplicateAction;
+        set { if (SetField(ref _duplicateAction, value)) Save(); }
+    }
+
+    public IEnumerable<DuplicateAction> AvailableDuplicateActions =>
+        Enum.GetValues<DuplicateAction>();
+
     // ── Default quality ───────────────────────────────────────────────────────
     private int _defaultQuality;
     public int DefaultQuality
@@ -109,6 +122,7 @@ public class SettingsViewModel : BaseViewModel
         _maxStitchHeight = _settings.MaxStitchHeight;
         _deleteOriginals = _settings.DeleteOriginals;
         _defaultQuality = _settings.DefaultQuality;
+        _duplicateAction = _settings.DuplicateAction;
 
         ResetCommand = new RelayCommand(ResetToDefaults);
     }
@@ -119,7 +133,9 @@ public class SettingsViewModel : BaseViewModel
         Format = _outputFormat,
         Quality = sessionQuality,
         MaxStitchHeight = Math.Min(_maxStitchHeight, MaxSafeHeight),
+        DuplicateAction = _duplicateAction,
         DeleteOriginals = _deleteOriginals
+
     };
 
     private void Save()
@@ -129,6 +145,7 @@ public class SettingsViewModel : BaseViewModel
         _settings.MaxStitchHeight = _maxStitchHeight;
         _settings.DeleteOriginals = _deleteOriginals;
         _settings.DefaultQuality = _defaultQuality;
+        _settings.DuplicateAction = _duplicateAction;
         _service.Save(_settings);
     }
 
@@ -139,5 +156,6 @@ public class SettingsViewModel : BaseViewModel
         MaxStitchHeight = 10000;
         DeleteOriginals = false;
         DefaultQuality = 85;
+        DuplicateAction = DuplicateAction.Skip;
     }
 }

@@ -11,4 +11,5 @@ public class AppSettings
     public int DefaultQuality { get; set; } = 85;
     public string DefaultOutputPath { get; set; } = string.Empty;
     public ExportFormat OutputFormat { get; set; } = ExportFormat.WebP;
+    public DuplicateAction DuplicateAction { get; set; } = DuplicateAction.Skip;
 }

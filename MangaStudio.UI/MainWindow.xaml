@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:MangaStudio.UI.Views"
         Title="MangaStudio"
-        Height="680" Width="960"
-        MinHeight="560" MinWidth="760"
+        Height="680" Width="980"
+        MinHeight="560" MinWidth="780"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource SurfaceBrush}">
 
@@ -19,21 +19,28 @@
                 Background="White"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="24,14">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="MangaStudio"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}"/>
-                <TextBlock Text="Long-strip processor"
-                           FontSize="13"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0"/>
-            </StackPanel>
+                Padding="24,12">
+            <Grid>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="MangaStudio"
+                               FontSize="18" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="Long-strip processor"
+                               FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <Button Content="About"
+                        Click="About_Click"
+                        Style="{StaticResource SecondaryButton}"
+                        HorizontalAlignment="Right"
+                        Padding="14,5"/>
+            </Grid>
         </Border>
 
-        <!-- ── Tab control ── -->
+        <!-- ── Tabs ── -->
         <TabControl Grid.Row="1"
                     Background="Transparent"
                     BorderThickness="0">
@@ -55,6 +62,9 @@
             </TabItem>
             <TabItem Header="Settings">
                 <views:SettingsView DataContext="{Binding Settings}"/>
+            </TabItem>
+            <TabItem Header="History">
+                <views:HistoryView DataContext="{Binding History}"/>
             </TabItem>
             <TabItem Header="Logs">
                 <views:LogView DataContext="{Binding Logs}"/>

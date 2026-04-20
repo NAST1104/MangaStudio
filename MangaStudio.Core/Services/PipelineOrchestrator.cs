@@ -1,4 +1,5 @@
 ﻿using MangaStudio.Core.DTOs;
+using MangaStudio.Core.Enums;
 using MangaStudio.Core.Interfaces;
 using Serilog;
 
@@ -33,11 +34,11 @@ public sealed class PipelineOrchestrator
     }
 
     public async Task<List<ProcessingResult>> ProcessAllAsync(
-    string mangaRootPath,
-    string outputRootPath,
-    ExportOptions options,
-    IProgress<(int current, int total, string currentChapter)>? progress = null,
-    CancellationToken cancellationToken = default)
+        string mangaRootPath,
+        string outputRootPath,
+        ExportOptions options,
+        IProgress<(int current, int total, string currentChapter)>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         var results = new List<ProcessingResult>();
 
@@ -54,12 +55,8 @@ public sealed class PipelineOrchestrator
 
         _logger.Information("Found {N} chapter(s) under {Path}", chapterPaths.Count, mangaRootPath);
 
-        // Derive manga name from the root folder and create a dedicated output subfolder.
-        // This prevents chapters from different manga overwriting each other.
-        // Example: input  = D:\Manga\OnePiece
-        //          output = D:\Output\OnePiece\CH0001\CH0001-001.webp
-        var mangaFolderName = Path.GetFileName(mangaRootPath.TrimEnd(Path.DirectorySeparatorChar,
-                                                                       Path.AltDirectorySeparatorChar));
+        var mangaFolderName = Path.GetFileName(
+            mangaRootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var mangaOutputPath = Path.Combine(outputRootPath, mangaFolderName);
 
         _logger.Information("Output path for this manga: {Path}", mangaOutputPath);
@@ -74,10 +71,57 @@ public sealed class PipelineOrchestrator
             _logger.Information("── Chapter {I}/{N}: {Name} ──", i + 1, chapterPaths.Count, folderName);
             progress?.Report((i, chapterPaths.Count, folderName));
 
+            // Rename on disk first so the normalized name drives the output path
             string normalizedPath = chapterPath;
             if (_chapterRenamer.TryRenameOnDisk(chapterPath, out var renamed))
                 normalizedPath = renamed;
 
+            var normalizedName = Path.GetFileName(normalizedPath);
+            var chapterOutputDir = Path.Combine(mangaOutputPath, normalizedName);
+
+            // ── Duplicate detection ──────────────────────────────────────────
+            if (Directory.Exists(chapterOutputDir) &&
+                Directory.GetFiles(chapterOutputDir).Length > 0)
+            {
+                if (options.DuplicateAction == DuplicateAction.Skip)
+                {
+                    _logger.Information(
+                        "Skipping {Name} — output already exists at {Dir}",
+                        normalizedName, chapterOutputDir);
+
+                    results.Add(new ProcessingResult
+                    {
+                        Success = true,
+                        IsSkipped = true,
+                        ChapterName = normalizedName,
+                        OutputFileCount = Directory.GetFiles(chapterOutputDir).Length
+                    });
+
+                    progress?.Report((i + 1, chapterPaths.Count, $"Skipped: {normalizedName}"));
+                    continue;
+                }
+                else // Overwrite
+                {
+                    _logger.Warning(
+                        "Overwriting {Name} — deleting existing output at {Dir}",
+                        normalizedName, chapterOutputDir);
+
+                    try { Directory.Delete(chapterOutputDir, recursive: true); }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Could not delete existing output for {Name}", normalizedName);
+                        results.Add(new ProcessingResult
+                        {
+                            Success = false,
+                            ChapterName = normalizedName,
+                            ErrorMessage = $"Could not delete existing output: {ex.Message}"
+                        });
+                        continue;
+                    }
+                }
+            }
+
+            // ── Scan images ──────────────────────────────────────────────────
             var imagePaths = _fileSorter
                 .Sort(_folderScanner.GetImagePaths(normalizedPath))
                 .ToList();
@@ -88,12 +132,13 @@ public sealed class PipelineOrchestrator
                 results.Add(new ProcessingResult
                 {
                     Success = false,
-                    ChapterName = folderName,
+                    ChapterName = normalizedName,
                     ErrorMessage = "No images found in chapter folder."
                 });
                 continue;
             }
 
+            // ── Build metadata ───────────────────────────────────────────────
             ChapterMetadata metadata;
             try
             {
@@ -107,17 +152,17 @@ public sealed class PipelineOrchestrator
                 results.Add(new ProcessingResult
                 {
                     Success = false,
-                    ChapterName = folderName,
+                    ChapterName = normalizedName,
                     ErrorMessage = $"Metadata error: {ex.Message}"
                 });
                 continue;
             }
 
+            // ── Stitch ───────────────────────────────────────────────────────
             var chapterProgress = new Progress<(int, int)>(p =>
                 progress?.Report((i, chapterPaths.Count,
-                    $"{mangaFolderName} - {folderName} — chunk {p.Item1}/{p.Item2}")));
+                    $"{normalizedName} — chunk {p.Item1}/{p.Item2}")));
 
-            // Pass mangaOutputPath so the structure is OutputRoot/MangaName/CH0001/
             ProcessingResult result;
             try
             {
@@ -126,11 +171,11 @@ public sealed class PipelineOrchestrator
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Unhandled error in stitch engine for chapter {Name}", folderName);
+                _logger.Error(ex, "Unhandled error in stitch engine for {Name}", normalizedName);
                 result = new ProcessingResult
                 {
                     Success = false,
-                    ChapterName = folderName,
+                    ChapterName = normalizedName,
                     ErrorMessage = $"{ex.GetType().Name}: {ex.Message}"
                 };
             }
@@ -140,8 +185,10 @@ public sealed class PipelineOrchestrator
 
         progress?.Report((chapterPaths.Count, chapterPaths.Count, "Done"));
 
-        _logger.Information("Pipeline complete — {P} succeeded, {F} failed",
-            results.Count(r => r.Success), results.Count(r => !r.Success));
+        _logger.Information("Pipeline complete — {P} succeeded, {S} skipped, {F} failed",
+            results.Count(r => r.Success && !r.IsSkipped),
+            results.Count(r => r.IsSkipped),
+            results.Count(r => !r.Success));
 
         return results;
     }

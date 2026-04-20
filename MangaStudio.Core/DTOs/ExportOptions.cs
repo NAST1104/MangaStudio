@@ -1,18 +1,18 @@
+using MangaStudio.Core.Enums;
+
 namespace MangaStudio.Core.DTOs;
 
 public enum ExportFormat { WebP, Jpg }
 
 public class ExportOptions
 {
-    // WebP hard limit enforced by the encoder
     public const int WebPMaxHeight = 15000;
-
-    // JPEG has no practical limit for manga use
     public const int JpgMaxHeight = 100000;
 
     public ExportFormat Format { get; init; } = ExportFormat.WebP;
     public int Quality { get; init; } = 85;
     public bool DeleteOriginals { get; init; } = false;
+    public DuplicateAction DuplicateAction { get; init; } = DuplicateAction.Skip;
 
     private int _maxStitchHeight = 10000;
     public int MaxStitchHeight

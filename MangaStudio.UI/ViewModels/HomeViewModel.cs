@@ -1,10 +1,12 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
+using System.IO;
+using MangaStudio.Core.DTOs;
 using MangaStudio.Core.Services;
 using MangaStudio.UI.Commands;
+using MangaStudio.UI.Models;
 using MangaStudio.UI.Services;
 using Microsoft.Win32;
-using System.IO;
 
 namespace MangaStudio.UI.ViewModels;
 
@@ -13,7 +15,11 @@ public class HomeViewModel : BaseViewModel
     private readonly PipelineOrchestrator _orchestrator;
     private readonly SettingsViewModel _settings;
     private readonly SettingsService _settingsService;
+    private readonly HistoryViewModel _history;
     private CancellationTokenSource? _cts;
+
+    // Raised on the UI thread after processing completes — View shows SummaryWindow
+    public event Action<List<ProcessingResult>, string>? ProcessingCompleted;
 
     // ── Folder list ───────────────────────────────────────────────────────────
     public ObservableCollection<string> FolderList { get; } = new();
@@ -33,14 +39,14 @@ public class HomeViewModel : BaseViewModel
         set { if (SetField(ref _outputPath, value)) PersistOutputPath(value); }
     }
 
-    // ── Per-session quality ───────────────────────────────────────────────────
+    // ── Quality ───────────────────────────────────────────────────────────────
     private int _quality = 85;
     public int Quality
     {
         get => _quality;
         set => SetField(ref _quality, Math.Clamp(value, 1, 100));
     }
-    // Shown next to the quality slider so the user knows which format is active
+
     public string QualityLabel => $"Output Quality ({_settings.OutputFormat})";
 
     // ── Processing state ──────────────────────────────────────────────────────
@@ -103,27 +109,26 @@ public class HomeViewModel : BaseViewModel
     public HomeViewModel(
         PipelineOrchestrator orchestrator,
         SettingsViewModel settings,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        HistoryViewModel history)
     {
         _orchestrator = orchestrator;
         _settings = settings;
         _settingsService = settingsService;
+        _history = history;
 
         var saved = settingsService.Load();
         _outputPath = saved.DefaultOutputPath;
         _quality = saved.DefaultQuality;
 
         AddFolderCommand = new RelayCommand(
-            AddFolder,
-            () => !IsProcessing);
+            AddFolder, () => !IsProcessing);
 
         RemoveFolderCommand = new RelayCommand(
-            RemoveFolder,
-            () => !IsProcessing && SelectedFolder is not null);
+            RemoveFolder, () => !IsProcessing && SelectedFolder is not null);
 
         BrowseOutputCommand = new RelayCommand(
-            BrowseOutput,
-            () => !IsProcessing);
+            BrowseOutput, () => !IsProcessing);
 
         StartCommand = new AsyncRelayCommand(
             StartProcessingAsync,
@@ -132,8 +137,7 @@ public class HomeViewModel : BaseViewModel
                   && !string.IsNullOrWhiteSpace(OutputPath));
 
         CancelCommand = new RelayCommand(
-            CancelProcessing,
-            () => IsProcessing);
+            CancelProcessing, () => IsProcessing);
 
         _settings.PropertyChanged += (_, e) =>
         {
@@ -142,20 +146,21 @@ public class HomeViewModel : BaseViewModel
         };
     }
 
-    private void AddFolder()
+    // Called from code-behind for drag and drop
+    public void AddFolders(IEnumerable<string> paths)
     {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Select manga root folder"
-        };
-
-        if (dialog.ShowDialog() != true) return;
-
-        var path = dialog.FolderName;
-        if (!FolderList.Contains(path))
-            FolderList.Add(path);
+        foreach (var path in paths.Where(Directory.Exists))
+            if (!FolderList.Contains(path))
+                FolderList.Add(path);
 
         RelayCommand.RaiseCanExecuteChanged();
+    }
+
+    private void AddFolder()
+    {
+        var dialog = new OpenFolderDialog { Title = "Select manga root folder" };
+        if (dialog.ShowDialog() != true) return;
+        AddFolders(new[] { dialog.FolderName });
     }
 
     private void RemoveFolder()
@@ -168,11 +173,7 @@ public class HomeViewModel : BaseViewModel
 
     private void BrowseOutput()
     {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Select output folder"
-        };
-
+        var dialog = new OpenFolderDialog { Title = "Select output folder" };
         if (dialog.ShowDialog() == true)
             OutputPath = dialog.FolderName;
     }
@@ -190,10 +191,8 @@ public class HomeViewModel : BaseViewModel
         var options = _settings.BuildExportOptions(Quality);
         var token = _cts.Token;
 
-        int totalSucceeded = 0;
-        int totalFailed = 0;
+        var allResults = new List<ProcessingResult>();
 
-        // Marshal progress updates back to the UI thread
         var progress = new Progress<(int current, int total, string currentChapter)>(p =>
         {
             ProgressMax = p.total;
@@ -204,51 +203,66 @@ public class HomeViewModel : BaseViewModel
 
         try
         {
-            // Task.Run moves all synchronous pipeline work (IO, image processing)
-            // off the UI thread onto the thread pool.
-            // Progress<T> and CancellationToken cross the boundary safely.
-            var (succeeded, failed) = await Task.Run(async () =>
+            await Task.Run(async () =>
             {
-                int s = 0, f = 0;
-
                 for (int i = 0; i < folders.Count; i++)
                 {
                     token.ThrowIfCancellationRequested();
 
-                    var folderName = Path.GetFileName(folders[i]);
+                    var mangaName = Path.GetFileName(
+                        folders[i].TrimEnd(Path.DirectorySeparatorChar,
+                                           Path.AltDirectorySeparatorChar));
 
-                    // Post a status update to the UI thread
                     ((IProgress<(int, int, string)>)progress)
-                        .Report((i, folders.Count, $"Scanning: {folderName}"));
+                        .Report((i, folders.Count, $"Scanning: {mangaName}"));
 
                     var results = await _orchestrator.ProcessAllAsync(
                         folders[i], OutputPath, options, progress, token);
 
-                    s += results.Count(r => r.Success);
-                    f += results.Count(r => !r.Success);
-                }
+                    allResults.AddRange(results);
 
-                return (s, f);
+                    // Save to history
+                    var entry = new HistoryEntry
+                    {
+                        ProcessedAt = DateTime.Now,
+                        MangaName = mangaName,
+                        MangaRootPath = folders[i],
+                        OutputPath = OutputPath,
+                        TotalChapters = results.Count,
+                        Succeeded = results.Count(r => r.Success && !r.IsSkipped),
+                        Skipped = results.Count(r => r.IsSkipped),
+                        Failed = results.Count(r => !r.Success),
+                        FailedChapterNames = results
+                            .Where(r => !r.Success)
+                            .Select(r => r.ChapterName)
+                            .ToList(),
+                        Format = options.Format,
+                        Quality = options.Quality
+                    };
+
+                    _history.AddEntry(entry);
+                }
             }, token);
 
-            totalSucceeded = succeeded;
-            totalFailed = failed;
+            var succeeded = allResults.Count(r => r.Success && !r.IsSkipped);
+            var skipped = allResults.Count(r => r.IsSkipped);
+            var failed = allResults.Count(r => !r.Success);
 
             StatusText = "Completed";
-            SummaryText = $"Done — {totalSucceeded} chapter(s) succeeded, {totalFailed} failed.";
+            SummaryText = $"Done — {succeeded} succeeded, {skipped} skipped, {failed} failed.";
             ProgressValue = ProgressMax;
+
+            ProcessingCompleted?.Invoke(allResults, OutputPath);
         }
         catch (OperationCanceledException)
         {
             StatusText = "Cancelled";
-            SummaryText = $"Cancelled — {totalSucceeded} chapter(s) completed before cancel.";
+            SummaryText = "Cancelled by user.";
         }
         catch (Exception ex)
         {
             StatusText = "Error";
             SummaryText = $"Error: {ex.GetType().Name} — {ex.Message}";
-
-            // Inner exception often has the real cause (e.g. libvips error inside a wrapper)
             if (ex.InnerException is not null)
                 SummaryText += $"\nCause: {ex.InnerException.Message}";
         }

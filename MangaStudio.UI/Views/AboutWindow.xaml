@@ -1,0 +1,69 @@
+﻿<Window x:Class="MangaStudio.UI.Views.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About MangaStudio"
+        Width="420" Height="320"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource SurfaceBrush}">
+
+    <StackPanel Margin="36">
+
+        <TextBlock Text="MangaStudio"
+                   FontSize="26"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}"/>
+
+        <TextBlock Text="Long-strip manga processor"
+                   FontSize="13"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   Margin="0,4,0,24"/>
+
+        <!-- Version rows -->
+        <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="App version"       Style="{StaticResource HintText}"/>
+            <TextBlock Grid.Column="1" x:Name="AppVersionText"
+                       FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+        </Grid>
+
+        <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text=".NET version"      Style="{StaticResource HintText}"/>
+            <TextBlock Grid.Column="1" x:Name="DotNetVersionText"
+                       FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+        </Grid>
+
+        <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="libvips version"   Style="{StaticResource HintText}"/>
+            <TextBlock Grid.Column="1" x:Name="VipsVersionText"
+                       FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+        </Grid>
+
+        <Grid Margin="0,0,0,32">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="ImageSharp version" Style="{StaticResource HintText}"/>
+            <TextBlock Grid.Column="1" x:Name="SharpVersionText"
+                       FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+        </Grid>
+
+        <Button Content="Close"
+                Click="Close_Click"
+                Style="{StaticResource PrimaryButton}"
+                Width="90"
+                HorizontalAlignment="Left"/>
+    </StackPanel>
+</Window>

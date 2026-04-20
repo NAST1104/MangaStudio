@@ -1,0 +1,171 @@
+﻿<UserControl x:Class="MangaStudio.UI.Views.HistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Background="{StaticResource SurfaceBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Toolbar ── -->
+        <Border Grid.Row="0"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="20,12">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Remove Selected"
+                        Command="{Binding RemoveCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,0"/>
+                <Button Content="Clear All"
+                        Command="{Binding ClearAllCommand}"
+                        Style="{StaticResource DangerButton}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Entry list ── -->
+        <ListView Grid.Row="1"
+                  ItemsSource="{Binding Entries}"
+                  SelectedItem="{Binding Selected}"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  VirtualizingPanel.IsVirtualizing="True">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding"         Value="0"/>
+                    <Setter Property="Background"      Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{StaticResource AccentLightBrush}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="16,6"
+                            Background="White"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="16,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Left: name + path + date -->
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding MangaName}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding MangaRootPath}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,2,0,6"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontSize="11"
+                                               Foreground="{StaticResource MutedBrush}">
+                                        <Run Text="{Binding ProcessedAt, StringFormat='dd MMM yyyy  HH:mm'}"/>
+                                        <Run Text="  ·  "/>
+                                        <Run Text="{Binding Format}"/>
+                                        <Run Text=" "/>
+                                        <Run Text="{Binding Quality}"/>
+                                        <Run Text="%"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Right: stat badges -->
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+
+                                <!-- Succeeded -->
+                                <Border Background="#DCFCE7"
+                                        CornerRadius="12"
+                                        Padding="10,4"
+                                        Margin="0,0,6,0">
+                                    <TextBlock FontSize="12"
+                                               Foreground="#166534"
+                                               FontWeight="SemiBold">
+                                        <Run Text="✓ "/>
+                                        <Run Text="{Binding Succeeded}"/>
+                                    </TextBlock>
+                                </Border>
+
+                                <!-- Skipped -->
+                                <Border Background="#FEF9C3"
+                                        CornerRadius="12"
+                                        Padding="10,4"
+                                        Margin="0,0,6,0">
+                                    <TextBlock FontSize="12"
+                                               Foreground="#854D0E"
+                                               FontWeight="SemiBold">
+                                        <Run Text="⊘ "/>
+                                        <Run Text="{Binding Skipped}"/>
+                                    </TextBlock>
+                                </Border>
+
+                                <!-- Failed -->
+                                <Border Background="#FEE2E2"
+                                        CornerRadius="12"
+                                        Padding="10,4">
+                                    <TextBlock FontSize="12"
+                                               Foreground="#991B1B"
+                                               FontWeight="SemiBold">
+                                        <Run Text="✗ "/>
+                                        <Run Text="{Binding Failed}"/>
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- ── Empty state ── -->
+        <StackPanel Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Entries.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
+            <TextBlock Text="No processing history yet"
+                       FontSize="16"
+                       Foreground="{StaticResource MutedBrush}"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="Processed manga will appear here"
+                       FontSize="13"
+                       Foreground="{StaticResource MutedBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <!-- ── Footer: total count ── -->
+        <Border Grid.Row="2"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,8">
+            <TextBlock Style="{StaticResource HintText}">
+                <Run Text="{Binding Entries.Count, Mode=OneWay}"/>
+                <Run Text=" runs in history"/>
+            </TextBlock>
+        </Border>
+    </Grid>
+</UserControl>

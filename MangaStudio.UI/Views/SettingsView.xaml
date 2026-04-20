@@ -145,6 +145,68 @@
                        TextWrapping="Wrap"
                        Margin="20,4,0,0"/>
 
+            <!-- ── Duplicate Chapters ── -->
+            <TextBlock Style="{StaticResource SectionHeader}"
+           Text="Existing Output Chapters" Margin="0,28,0,6"/>
+            <TextBlock Style="{StaticResource HintText}"
+           Text="What to do when a chapter's output folder already exists."
+           TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+            <StackPanel Orientation="Horizontal">
+
+                <!-- Skip card -->
+                <Border Background="White"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="16,12"
+            Margin="0,0,12,0"
+            Width="270">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <RadioButton GroupName="DupAction"
+                             VerticalAlignment="Center"
+                             IsChecked="{Binding DuplicateAction,
+                                 Converter={StaticResource EnumToBool},
+                                 ConverterParameter=Skip}"/>
+                            <TextBlock Text="Skip"
+                           FontWeight="SemiBold" FontSize="14"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="Leave existing output untouched and move on."
+                       Style="{StaticResource HintText}"
+                       TextWrapping="Wrap" Margin="22,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Overwrite card -->
+                <Border Background="White"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="16,12"
+            Width="270">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <RadioButton GroupName="DupAction"
+                             VerticalAlignment="Center"
+                             IsChecked="{Binding DuplicateAction,
+                                 Converter={StaticResource EnumToBool},
+                                 ConverterParameter=Overwrite}"/>
+                            <TextBlock Text="Overwrite"
+                           FontWeight="SemiBold" FontSize="14"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="Delete existing output and reprocess the chapter."
+                       Style="{StaticResource HintText}"
+                       TextWrapping="Wrap" Margin="22,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+
             <!-- ── Reset ── -->
             <Button Content="Reset to Defaults"
                     Command="{Binding ResetCommand}"
